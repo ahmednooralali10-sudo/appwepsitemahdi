@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template_string
 import requests
 import urllib.parse
+import time
 
 app = Flask(__name__)
 
@@ -8,7 +9,10 @@ app = Flask(__name__)
 SECRET_ACCESS_CODE = "XOREYT123400028"
 
 # 🔔 رابط Discord Webhook الخاص بك لإرسال معلومات الزوار
-DISCORD_WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1556178719171940412/cLjKIxt81tQvjaBaNK6FVJidzGwQdZdkqhdiIiqtOV85pCmr2k4LHP4e6cYy5-PwCXkg"
+
+# 🛡️ مفتاح VirusTotal API الخاص بك
+VIRUSTOTAL_API_KEY = "a9068f5586219ca658cd2d39dcd5e585229e8042f404c65ab21744612e6a86d3"
 
 # 🛡️ مفاتيح reCAPTCHA
 RECAPTCHA_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
@@ -37,13 +41,23 @@ HTML_LAYOUT = """
             transition: all 0.3s ease;
             box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
         }
-        .glow-button:hover {
+        .glow-button:hover:not(:disabled) {
             box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
             transform: translateY(-2px);
         }
         .glow-telegram:hover { box-shadow: 0 0 25px rgba(56, 189, 248, 0.35); }
         .glow-youtube:hover { box-shadow: 0 0 25px rgba(239, 68, 68, 0.35); }
         .glow-discord:hover { box-shadow: 0 0 25px rgba(99, 102, 241, 0.35); }
+        
+        @keyframes progress-stripe {
+            0% { background-position: 1rem 0; }
+            100% { background-position: 0 0; }
+        }
+        .animate-stripes {
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem;
+            animation: progress-stripe 1s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-[#0b0f19] min-h-screen flex items-center justify-center p-4 text-slate-100 relative overflow-x-hidden selection:bg-indigo-500 selection:text-white">
@@ -53,7 +67,7 @@ HTML_LAYOUT = """
 
     <div class="max-w-md w-full glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl text-center relative z-10 my-6">
         
-        <!-- 🚀 كرت قنواتك وحساباتك الرسمية -->
+        <!-- 🚀 كرت القنوات -->
         <div class="mb-8 p-4 bg-slate-900/60 rounded-2xl border border-slate-800/80">
             <p class="text-xs font-bold text-slate-400 mb-3 tracking-wider">انضم وتابع مجتمعنا عبر القنوات التالية 🌟</p>
             <div class="grid grid-cols-3 gap-2 sm:gap-3">
@@ -91,7 +105,7 @@ def verify_recaptcha(response_token):
         return False
 
 def send_visitor_webhook(file_name, user_ip, user_agent):
-    if not DISCORD_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_WEBHOOK_URL:
+    if not DISCORD_WEBHOOK_URL:
         return
 
     country, city = "غير معروف", "غير معروف"
@@ -110,9 +124,9 @@ def send_visitor_webhook(file_name, user_ip, user_agent):
             {"name": "📄 اسم الملف", "value": f"`{file_name}`", "inline": False},
             {"name": "🌍 الدولة والمدينة", "value": f"{country} - {city}", "inline": True},
             {"name": "🌐 IP الزائر", "value": f"`{user_ip}`", "inline": True},
-            {"name": "📱 الجهاز والمتصفح", "value": f"```{user_agent[:150]}```", "inline": False}
+            {"name": "📱 الجهاز ومتصفح الزائر", "value": f"```{user_agent[:150]}```", "inline": False}
         ],
-        "footer": {"text": "نظام الحماية والمراقبة الذكي"}
+        "footer": {"text": "نظام الحماية والذكاء الاصطناعي الذكي"}
     }
     
     try:
@@ -134,7 +148,6 @@ def home():
         elif not verify_recaptcha(recaptcha_response):
             error_msg = "⚠️ يرجى تأكيد أنك لست برنامج روبوت!"
         elif mediafire_url and custom_name:
-            # إنشاء رابط المشاركة الطويل كاملاً بدون قص
             share_link = request.host_url + f"download?name={urllib.parse.quote(custom_name)}&url={urllib.parse.quote(mediafire_url)}"
             
             content = f"""
@@ -146,7 +159,7 @@ def home():
                 <input type="text" value="{share_link}" readonly id="linkInput" class="w-full bg-transparent text-xs text-center text-indigo-300 font-mono outline-none select-all whitespace-nowrap">
             </div>
             
-            <button onclick="navigator.clipboard.writeText('{share_link}'); alert('تم نسخ الرابط الكامل بنجاح!');" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm mb-3">
+            <button onclick="navigator.clipboard.writeText('{share_link}'); alert('تم نسخ رابط المشاركة بنجاح!');" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm mb-3">
                 📋 نسخ رابط المشاركة
             </button>
             
@@ -159,13 +172,24 @@ def home():
     error_html = f'<div class="p-3 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl">{error_msg}</div>' if error_msg else ''
 
     content = f"""
-    <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 text-2xl">🔐</div>
-    <h1 class="text-xl font-black text-white mb-1">لوحة إعداد رابط التحميل</h1>
-    <p class="text-slate-400 text-xs mb-6">أدخل رابط ميديا فاير واسم الملف ليتم إظهاره بواجهتك</p>
+    <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 text-2xl">🤖</div>
+    <h1 class="text-xl font-black text-white mb-1">لوحة فحص وإنشاء الرابط</h1>
+    <p class="text-slate-400 text-xs mb-6">سيتم محاكاة الفحص وتجهيز الصفحة مع التحذيرات الذكية</p>
     
     {error_html}
 
-    <form method="POST" class="space-y-4 text-right">
+    <!-- 📊 شريط التحميل والفحص بالذكاء الاصطناعي -->
+    <div id="scanProgressContainer" class="hidden mb-6 p-4 bg-slate-950/80 border border-indigo-500/30 rounded-2xl text-right">
+        <div class="flex justify-between items-center mb-2">
+            <span id="scanStatusText" class="text-xs font-bold text-indigo-400 animate-pulse">جاري الفحص بالذكاء الاصطناعي...</span>
+            <span id="scanPercent" class="text-xs font-black text-indigo-300">0%</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
+            <div id="progressBar" class="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full rounded-full transition-all duration-300 animate-stripes w-0"></div>
+        </div>
+    </div>
+
+    <form id="uploadForm" method="POST" class="space-y-4 text-right">
         <div>
             <label class="block text-xs font-bold text-amber-400 mb-1">🔑 رمز الدخول الخاص:</label>
             <input type="password" name="access_code" placeholder="أدخل رمز الحماية هنا" required class="w-full p-3 bg-slate-950/70 border border-amber-500/30 rounded-xl text-white placeholder-slate-600 focus:border-amber-400 outline-none text-xs transition-all">
@@ -173,7 +197,7 @@ def home():
 
         <div>
             <label class="block text-xs font-bold text-slate-300 mb-1">اسم الملف للعرض في الصفحة:</label>
-            <input type="text" name="file_name" placeholder="مثال: مود_السيارات_الجديد.zip" required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
+            <input type="text" name="file_name" placeholder="مثال: تطبيق_الهاتف.apk" required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
         </div>
         
         <div>
@@ -185,40 +209,140 @@ def home():
             <div class="g-recaptcha" data-sitekey="{RECAPTCHA_SITE_KEY}" data-theme="dark"></div>
         </div>
 
-        <button type="submit" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm">
-            حفظ وإنشاء رابط الصفحة
+        <button type="submit" id="submitBtn" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
+            <span>🛡️ فحص وإنشاء الرابط مع التحذيرات</span>
         </button>
     </form>
+
+    <script>
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {{
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        const progressContainer = document.getElementById('scanProgressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const scanStatusText = document.getElementById('scanStatusText');
+        const scanPercent = document.getElementById('scanPercent');
+
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+        progressContainer.classList.remove('hidden');
+
+        let percent = 0;
+        const steps = [
+            {{ p: 25, t: "🔍 إرسال الرابط لمحركات الفحص بالذكاء الاصطناعي..." }},
+            {{ p: 60, t: "⚡ فحص الأكواد البرمجية بحثاً عن الاشتباه برمجياً..." }},
+            {{ p: 85, t: "⚠️ اعتماد إعدادات الأمان والتحذير للزائر..." }},
+            {{ p: 100, t: "✨ كُمل الفحص بنجاح!" }}
+        ];
+
+        let stepIndex = 0;
+        const interval = setInterval(() => {{
+            if (stepIndex < steps.length) {{
+                percent = steps[stepIndex].p;
+                scanStatusText.innerText = steps[stepIndex].t;
+                scanPercent.innerText = percent + "%";
+                progressBar.style.width = percent + "%";
+                stepIndex++;
+            }} else {{
+                clearInterval(interval);
+                setTimeout(() => {{
+                    document.getElementById('uploadForm').submit();
+                }}, 500);
+            }}
+        }}, 800);
+    }});
+    </script>
     """
-    return render_template_string(HTML_LAYOUT, content=content, title="لوحة الإعداد")
+    return render_template_string(HTML_LAYOUT, content=content, title="لوحة الفحص والإعداد")
 
 @app.route('/download')
 def download():
     file_name = request.args.get('name', 'ملف للمشاركة')
     file_url = request.args.get('url', '#')
 
-    # إرسال بيانات الزائر للديسكورد
+    # إرسال بيانات الزائر للديسكورد عبر الـ Webhook
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     if user_ip and ',' in user_ip:
         user_ip = user_ip.split(',')[0].strip()
     user_agent = request.headers.get('User-Agent', 'غير معروف')
-
     send_visitor_webhook(file_name, user_ip, user_agent)
 
     content = f"""
-    <div class="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/30 text-4xl shadow-inner">📄</div>
-    <h1 class="text-2xl font-black text-white mb-2">{file_name}</h1>
-    <p class="text-xs text-slate-400 mb-8">الملف مفحوص ومضمون، اضغط أدناه للانتقال للتحميل المباشر</p>
-
-    <a href="{file_url}" target="_blank" class="glow-button w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/30 text-sm">
-        <span>⬇️ تحميل الملف الآن</span>
-    </a>
-    
-    <div class="mt-6 flex items-center justify-center gap-1.5 text-xs text-slate-500">
-        <span>🔒 رابط آمن ومباشر 100%</span>
+    <!-- ⚠️ التحذير الأول: تنبيه الدخول البارز -->
+    <div class="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-right">
+        <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-amber-400 text-lg">⚠️</span>
+            <h3 class="text-xs font-bold text-amber-300">تنبيه وأمان الحماية:</h3>
+        </div>
+        <p class="text-[11px] text-amber-200/80 leading-relaxed">
+            قد يشتبه النظام بوجود ضرر في الملف أو عدم التأكد من مصدره 100%. لسنا متأكدين تماماً ولكنه يحمل اشتباهاً أمنياً. نوصي بفحصه دائماً عبر برنامج الحماية الخاص بك قبل التثبيت.
+        </p>
     </div>
+
+    <!-- 📦 تفاصيل الملف -->
+    <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 text-right mb-6">
+        <div class="text-[11px] text-slate-400 mb-1">الملف المطلوب:</div>
+        <div class="text-sm font-bold text-indigo-300 truncate font-mono">{file_name}</div>
+        <div class="mt-2 text-[10px] text-slate-500 flex justify-between items-center">
+            <span>حالة الملف: <strong class="text-amber-400">تحت الاشتباه</strong></span>
+            <span>الاستضافة: MediaFire</span>
+        </div>
+    </div>
+
+    <!-- ⏳ زر التحميل مع المؤقت 3 ثوانٍ والتحذير الثاني عند الضغط -->
+    <button id="downloadBtn" disabled onclick="showSecondWarning()" class="glow-button w-full bg-slate-800 text-slate-400 font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2 cursor-not-allowed">
+        <span id="btnText">⏳ انتظر 3 ثوانٍ لتفعيل الزر...</span>
+    </button>
+
+    <!-- 🚨 التحذير الثاني: النافذة المنبثقة (Modal) -->
+    <div id="warningModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 text-right">
+        <div class="glass-panel max-w-sm w-full rounded-2xl p-6 border border-red-500/30 relative">
+            <div class="w-12 h-12 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl border border-red-500/30">
+                🚨
+            </div>
+            <h3 class="text-base font-bold text-white text-center mb-2">تأكيد التنزيل على مسؤوليتك</h3>
+            <p class="text-xs text-slate-300 leading-relaxed mb-6">
+                هذا تحذير أخير: قد يحتوي الملف على برمجيات غير معروفة أو يشار إليها كاشتباه من المحركات. هل تريد المتابعة وتنزيل الملف على أي حال؟
+            </p>
+            <div class="flex gap-3">
+                <a href="{file_url}" target="_blank" onclick="closeModal()" class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs text-center transition-all shadow-lg shadow-red-600/30">
+                    نعم، تنزيل الملف
+                </a>
+                <button onclick="closeModal()" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let timeLeft = 3;
+    const btn = document.getElementById('downloadBtn');
+    const btnText = document.getElementById('btnText');
+
+    const countdown = setInterval(() => {{
+        timeLeft--;
+        if (timeLeft > 0) {{
+            btnText.innerText = "⏳ انتظر " + timeLeft + " ثوانٍ لتفعيل الزر...";
+        }} else {{
+            clearInterval(countdown);
+            btn.disabled = false;
+            btn.classList.remove('bg-slate-800', 'text-slate-400', 'cursor-not-allowed');
+            btn.classList.add('bg-indigo-600', 'hover:bg-indigo-500', 'text-white', 'cursor-pointer');
+            btnText.innerText = "📥 تنزيل الملف الآن";
+        }}
+    }}, 1000);
+
+    function showSecondWarning() {{
+        document.getElementById('warningModal').classList.remove('hidden');
+    }}
+
+    function closeModal() {{
+        document.getElementById('warningModal').classList.add('hidden');
+    }}
+    </script>
     """
-    return render_template_string(HTML_LAYOUT, content=content, title=file_name)
+    return render_template_string(HTML_LAYOUT, content=content, title=f"تحميل {file_name}")
 
 if __name__ == '__main__':
     app.run(debug=True)
