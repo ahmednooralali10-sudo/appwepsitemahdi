@@ -55,7 +55,15 @@ HTML_LAYOUT = """
 </html>
 """
 
+def clean_url(url_str):
+    """تنظيف الرابط من الرموز الخفية والمخفية (مثل UTF-8 BOM أو علامات الاتجاهات)"""
+    if not url_str:
+        return ""
+    cleaned = url_str.encode('utf-8').replace(b'\xe2\x80\x8f', b'').replace(b'\xe2\x80\x8e', b'').decode('utf-8', errors='ignore')
+    return cleaned.strip()
+
 def extract_plist_data(itms_url):
+    """استخراج اسم التطبيق ورابط أيقونته تلقائياً من ملف manifest.plist"""
     app_title = "تطبيق iOS"
     app_icon = ""
 
@@ -106,9 +114,11 @@ def home():
         if not verify_recaptcha(recaptcha_response):
             error_msg = "⚠️ يرجى تأكيد أنك لست برنامج روبوت!"
         elif download_url:
+            # تنظيف الرابط من الحروف والرموز الخفية
+            download_url = clean_url(download_url)
+            
             extracted_title, extracted_icon = extract_plist_data(download_url)
             
-            # ترميز البيانات في كود قصير دون الحاجة لقاعدة بيانات
             data_to_encode = {
                 "n": extracted_title,
                 "u": download_url,
@@ -166,7 +176,6 @@ def home():
 @app.route('/d/<code>')
 def download_slug(code):
     try:
-        # فك تشفير البيانات من الكود القصير
         padding = "=" * (-len(code) % 4)
         decoded_bytes = base64.urlsafe_b64decode(code + padding)
         data = json.loads(decoded_bytes.decode())
@@ -175,7 +184,7 @@ def download_slug(code):
         file_url = data.get("u", "#")
         app_icon = data.get("i", "")
     except Exception:
-        return "⚠️ الرابط غير صالح أو تم إدخاله بشكل خاطئ.", 404
+        return "⚠️️ الرابط غير صالح أو تم إدخاله بشكل خاطئ.", 404
 
     default_icon = "https://cdn-icons-png.flaticon.com/512/2583/2583208.png"
     icon_src = app_icon if app_icon else default_icon
