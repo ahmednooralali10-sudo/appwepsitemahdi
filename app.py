@@ -200,7 +200,7 @@ def home():
 
         if (!fileInput.files.length) return;
 
-        btnText.innerText = 'جاري رفع الملف مباشرة... ⏳';
+        btnText.innerText = 'جاري رفع الملف... ⏳';
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-75');
 
@@ -208,23 +208,22 @@ def home():
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
-            // رفع الملف مباشرة عبر المتصفح لتفادي قيود حجم سيرفر Vercel
-            const res = await fetch('https://tmpfiles.org/api/v1/upload', {{
+            // الرفع المباشر عبر file.io المفتوح يدعم CORS تماماً وبسرعة فائقة
+            const res = await fetch('https://file.io', {{
                 method: 'POST',
                 body: formData
             }});
 
             const data = await res.json();
 
-            if (res.ok && data.data && data.data.url) {{
-                const directUrl = data.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-                document.getElementById('direct_file_url').value = directUrl;
+            if (res.ok && data.success && data.link) {{
+                document.getElementById('direct_file_url').value = data.link;
                 this.submit();
             }} else {{
                 throw new Error('فشل الرفع');
             }}
         }} catch (err) {{
-            errorBox.innerText = '❌ حدث خطأ أثناء الرفع، حاول مرة أخرى.';
+            errorBox.innerText = '❌ تعذر الرفع السريع، حاول مرة أخرى.';
             errorBox.classList.remove('hidden');
             btnText.innerText = 'حفظ وإنشاء رابط المشاركة';
             submitBtn.disabled = false;
