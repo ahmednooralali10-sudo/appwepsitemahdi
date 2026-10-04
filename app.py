@@ -1,9 +1,9 @@
-from flask import Flask, request, render_template_string, redirect, url_for
+from flask import Flask, request, render_template_string
 import requests
 import urllib.parse
 import xml.etree.ElementTree as ET
-import sqlite3
-import re
+import base64
+import json
 
 app = Flask(__name__)
 
@@ -13,47 +13,6 @@ DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1556178719171940412/cLjK
 # 🛡️ مفاتيح reCAPTCHA
 RECAPTCHA_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
 RECAPTCHA_SECRET_KEY = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
-
-# 🗄️ إعداد قاعدة البيانات لتخزين الروابط واسترجاعها بأسماء قصيرة
-def init_db():
-    conn = sqlite3.connect('links.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS links (
-            slug TEXT PRIMARY KEY,
-            file_name TEXT,
-            download_url TEXT,
-            app_icon TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-init_db()
-
-def slugify(text):
-    """تحويل اسم التطبيق إلى نص صالح للروابط (Slug)"""
-    text = text.lower().strip()
-    text = re.sub(r'[^\w\s-]', '', text)
-    text = re.sub(r'[\s_-]+', '-', text)
-    return text if text else "app"
-
-def get_unique_slug(base_slug):
-    """التحقق من تكرار الرابط وإضافة رقم في النهاية تلقائياً إذا كان مستخدماً"""
-    conn = sqlite3.connect('links.db')
-    cursor = conn.cursor()
-    
-    slug = base_slug
-    counter = 1
-    while True:
-        cursor.execute("SELECT slug FROM links WHERE slug = ?", (slug,))
-        if not cursor.fetchone():
-            break
-        slug = f"{base_slug}-{counter}"
-        counter += 1
-        
-    conn.close()
-    return slug
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
@@ -97,7 +56,6 @@ HTML_LAYOUT = """
 """
 
 def extract_plist_data(itms_url):
-    """استخراج اسم التطبيق ورابط الصورة تلقائياً من الـ plist"""
     app_title = "تطبيق iOS"
     app_icon = ""
 
@@ -148,34 +106,29 @@ def home():
         if not verify_recaptcha(recaptcha_response):
             error_msg = "⚠️ يرجى تأكيد أنك لست برنامج روبوت!"
         elif download_url:
-            # 1️⃣ استخراج البيانات تلقائياً
             extracted_title, extracted_icon = extract_plist_data(download_url)
             
-            # 2️⃣ إنشاء اسم قصير فريد (Slug) وإضافة رقم بالنهاية إذا كان مكرراً
-            base_slug = slugify(extracted_title)
-            final_slug = get_unique_slug(base_slug)
+            # ترميز البيانات في كود قصير دون الحاجة لقاعدة بيانات
+            data_to_encode = {
+                "n": extracted_title,
+                "u": download_url,
+                "i": extracted_icon
+            }
+            json_str = json.dumps(data_to_encode)
+            encoded_code = base64.urlsafe_b64encode(json_str.encode()).decode().rstrip("=")
 
-            # 3️⃣ حفظ الرابط والبيانات في قاعدة البيانات
-            conn = sqlite3.connect('links.db')
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO links (slug, file_name, download_url, app_icon) VALUES (?, ?, ?, ?)",
-                           (final_slug, extracted_title, download_url, extracted_icon))
-            conn.commit()
-            conn.close()
-
-            # 4️⃣ تكوين الرابط القصير الأنيق
-            share_link = f"{request.host_url}d/{final_slug}"
+            share_link = f"{request.host_url}d/{encoded_code}"
 
             content = f"""
             <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl border border-emerald-500/30">✓</div>
-            <h1 class="text-2xl font-black text-white mb-2">تم اختصار وتجهيز الرابط!</h1>
+            <h1 class="text-2xl font-black text-white mb-2">تم تجهيز الرابط!</h1>
             <p class="text-xs text-slate-400 mb-6">الاسم المستخرج: <span class="text-indigo-300 font-bold">{extracted_title}</span></p>
 
             <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 mb-4 overflow-x-auto">
                 <input type="text" value="{share_link}" readonly class="w-full bg-transparent text-xs text-center text-indigo-300 font-mono outline-none select-all whitespace-nowrap">
             </div>
 
-            <button onclick="navigator.clipboard.writeText('{share_link}'); alert('تم نسخ الرابط القصير بنجاح!');" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm mb-3">
+            <button onclick="navigator.clipboard.writeText('{share_link}'); alert('تم نسخ الرابط بنجاح!');" class="glow-button w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all text-sm mb-3">
                 📋 نسخ الرابط القصير
             </button>
             <a href="/" class="block text-xs text-slate-400 hover:text-slate-200 transition-colors mt-2">إنشاء رابط جديد</a>
@@ -210,19 +163,19 @@ def home():
     """
     return render_template_string(HTML_LAYOUT, content=content, title="مولد الروابط القصيرة")
 
-# 🔗 المسار القصير لتنزيل التطبيقات (مثال: /d/delta-ios أو /d/delta-ios-1)
-@app.route('/d/<slug>')
-def download_slug(slug):
-    conn = sqlite3.connect('links.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT file_name, download_url, app_icon FROM links WHERE slug = ?", (slug,))
-    row = cursor.fetchone()
-    conn.close()
-
-    if not row:
-        return "⚠️ الرابط غير موجود أو تم حذفه.", 404
-
-    file_name, file_url, app_icon = row
+@app.route('/d/<code>')
+def download_slug(code):
+    try:
+        # فك تشفير البيانات من الكود القصير
+        padding = "=" * (-len(code) % 4)
+        decoded_bytes = base64.urlsafe_b64decode(code + padding)
+        data = json.loads(decoded_bytes.decode())
+        
+        file_name = data.get("n", "تطبيق iOS")
+        file_url = data.get("u", "#")
+        app_icon = data.get("i", "")
+    except Exception:
+        return "⚠️ الرابط غير صالح أو تم إدخاله بشكل خاطئ.", 404
 
     default_icon = "https://cdn-icons-png.flaticon.com/512/2583/2583208.png"
     icon_src = app_icon if app_icon else default_icon
